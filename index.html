@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-W-L Chart & Word Cloud</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.anychart.com/releases/8.11.0/js/anychart-core.min.js"></script>
+    <script src="https://cdn.anychart.com/releases/8.11.0/js/anychart-tag-cloud.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background: linear-gradient(135deg, #FDF6EC 0%, #F8F4E6 100%); }
+        .title-font { font-family: 'Kanit', sans-serif; }
+        .card-shadow { box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); }
+        .kwl-button { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .kwl-button:hover { transform: scale(1.05); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+        #wordcloud-container { width: 100%; height: 500px; min-height: 400px; }
+        #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.8); z-index: 10; display: flex; align-items: center; justify-content: center; flex-direction: column; border-radius: 1rem; }
+
+        /* Outlined Radio Toggle Styles */
+        .filter-label {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: 1px solid #D1D5DB; /* gray-300 */
+        }
+        .filter-radio:checked + .filter-label {
+            color: white;
+            z-index: 1;
+        }
+        #filter-all:checked + .filter-label { background-color: #14B8A6; border-color: #0F766E; } /* teal-500 */
+        #filter-k:checked + .filter-label { background-color: #3B82F6; border-color: #2563EB; } /* blue-500 */
+        #filter-w:checked + .filter-label { background-color: #EC4899; border-color: #DB2777; } /* pink-500 */
+        #filter-l:checked + .filter-label { background-color: #22C55E; border-color: #16A34A; } /* green-500 */
+
+        .filter-label:hover {
+            background-color: #F3F4F6; /* gray-100 */
+        }
+        .filter-radio:checked + .filter-label:hover {
+             filter: brightness(1.1);
+        }
+
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div class="flex-grow">
+        <div class="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 grid-pattern">
+            <div class="max-w-4xl mx-auto px-6 py-12 text-center relative">
+                <h1 class="title-font text-5xl font-bold text-blue-900 mb-4">🚀K-W-L Chart</h1>
+                <p class="text-xl text-blue-700 font-medium">กิจกรรมสร้างความเข้าใจเรื่องสารประกอบไอออนิก</p>
+            </div>
+        </div>
+
+        <div class="max-w-4xl mx-auto px-6 py-12">
+            <div class="bg-white rounded-2xl card-shadow p-8 mb-2 relative">
+
+                <div class="text-center mb-8 pb-8 border-b">
+                    <h3 class="title-font text-2xl font-bold text-blue-900 mb-5">📝 เพิ่มคำตอบของคุณ</h3>
+                    <div class="flex justify-center items-center gap-4 flex-wrap">
+                        <button id="know-card" class="kwl-button title-font font-bold py-3 px-6 rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200">
+                            K - สิ่งที่รู้อยู่แล้ว
+                        </button>
+                        <button id="want-card" class="kwl-button title-font font-bold py-3 px-6 rounded-lg bg-pink-100 text-pink-800 hover:bg-pink-200">
+                            W - สิ่งที่อยากรู้
+                        </button>
+                        <button id="learned-card" class="kwl-button title-font font-bold py-3 px-6 rounded-lg bg-green-100 text-green-800 hover:bg-green-200">
+                            L - สิ่งที่ได้เรียนรู้
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex flex-col md:flex-row items-center justify-between mb-6">
+                     <div class="flex items-center mb-4 md:mb-0">
+                        <div class="w-12 h-12 bg-teal-400 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                            <span class="text-2xl">☁️</span>
+                        </div>
+                        <h2 class="title-font text-3xl font-bold text-teal-800">ภาพรวมคำตอบ</h2>
+                    </div>
+                    <!-- Button Group -->
+                    <div class="flex items-center gap-2">
+                        <button id="summary-button" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" /><path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" /></svg>
+                            <span>ดูสรุปผล</span>
+                        </button>
+                        <button id="refresh-button" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition">รีเฟรช</button>
+                        <button id="reset-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                            <span>รีเซตข้อมูล</span>
+                        </button>
+                    </div>
+                </div>
+
+                 <div class="flex justify-center mb-6 rounded-lg shadow-sm" role="group">
+                    <input type="radio" name="filter" id="filter-all" class="filter-radio hidden" value="All" checked>
+                    <label for="filter-all" class="filter-label px-5 py-2 text-sm font-medium text-gray-900 bg-white rounded-l-lg -mr-px">ทั้งหมด</label>
+
+                    <input type="radio" name="filter" id="filter-k" class="filter-radio hidden" value="สิ่งที่รู้อยู่แล้ว">
+                    <label for="filter-k" class="filter-label px-5 py-2 text-sm font-medium text-gray-900 bg-white -mr-px">สิ่งที่รู้อยู่แล้ว</label>
+
+                    <input type="radio" name="filter" id="filter-w" class="filter-radio hidden" value="สิ่งที่อยากรู้">
+                    <label for="filter-w" class="filter-label px-5 py-2 text-sm font-medium text-gray-900 bg-white -mr-px">สิ่งที่อยากรู้</label>
+
+                    <input type="radio" name="filter" id="filter-l" class="filter-radio hidden" value="สิ่งที่ได้เรียนรู้">
+                    <label for="filter-l" class="filter-label px-5 py-2 text-sm font-medium text-gray-900 bg-white rounded-r-lg">สิ่งที่ได้เรียนรู้</label>
+                </div>
+
+                <div id="wordcloud-container" class="relative">
+                    <div id="loading-overlay">
+                        <svg class="animate-spin h-10 w-10 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="mt-3 text-teal-700">กำลังโหลดข้อมูลล่าสุด...</p>
+                    </div>
+                </div>
+                <p class="text-center text-sm text-gray-500 mt-4">*หมายเหตุ: ข้อมูลอาจใช้เวลาอัปเดตเล็กน้อยและต้องมีคำอย่างน้อย 2 คำในหมวดหมู่นั้นๆ ถึงจะแสดงผล</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Section -->
+    <footer class="w-full bg-gray-800 text-gray-200 text-center py-4">
+        <p class="text-sm">ออกแบบและพัฒนาโดย นายธนสาร สีรักษ์ | Copyright © 2025 KT | Tanasarn Sirak.</p>
+    </footer>
+
+    <script>
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzP-KO-PBtIB6KEQ9gwrMy4LFZpbPromeNBhhQgEeGj0bi5ExBZnuj-kZ_VB5m8eJg98g/exec';
+        const loadingOverlay = document.getElementById('loading-overlay');
+        let chart;
+        let currentJsonData = []; // Store the latest fetched data
+
+        function showSummaryChart() {
+            if (!currentJsonData || currentJsonData.length === 0) {
+                Swal.fire('ไม่มีข้อมูล', 'ยังไม่มีข้อมูลสำหรับแสดงผลสรุปในขณะนี้', 'info');
+                return;
+            }
+
+            const top5Data = [...currentJsonData]
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+
+            const labels = top5Data.map(item => item.x);
+            const dataValues = top5Data.map(item => item.value);
+
+            const modalHtml = `
+                <div class="text-center">
+                    <h2 class="text-2xl font-bold mb-4 title-font">สรุปผล 5 อันดับแรก</h2>
+                    <canvas id="summaryChartCanvas"></canvas>
+                </div>
+            `;
+
+            Swal.fire({
+                html: modalHtml,
+                width: '800px',
+                didOpen: () => {
+                    const ctx = document.getElementById('summaryChartCanvas').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'จำนวนผู้ตอบ',
+                                data: dataValues,
+                                backgroundColor: [
+                                    'rgba(255, 99, 132, 0.5)',
+                                    'rgba(54, 162, 235, 0.5)',
+                                    'rgba(255, 206, 86, 0.5)',
+                                    'rgba(75, 192, 192, 0.5)',
+                                    'rgba(153, 102, 255, 0.5)'
+                                ],
+                                borderColor: [
+                                    'rgba(255, 99, 132, 1)',
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(255, 206, 86, 1)',
+                                    'rgba(75, 192, 192, 1)',
+                                    'rgba(153, 102, 255, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            scales: {
+                                x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: "'Sarabun', sans-serif" } } },
+                                y: { ticks: { font: { family: "'Sarabun', sans-serif", size: 14 } } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                title: { display: true, text: `คำตอบที่มีผู้ตอบมากที่สุด 5 อันดับแรก`, font: { family: "'Kanit', sans-serif", size: 18 } }
+                            }
+                        }
+                    });
+                },
+                confirmButtonText: 'ปิด'
+            });
+        }
+
+        function updateWordCloud() {
+            loadingOverlay.style.display = 'flex';
+            const selectedFilter = document.querySelector('input[name="filter"]:checked').value;
+            const fetchUrl = `${SCRIPT_URL}?filter=${encodeURIComponent(selectedFilter)}`;
+
+            fetch(fetchUrl)
+                .then(res => res.json())
+                .then(jsonData => {
+                    currentJsonData = jsonData;
+                    if (!chart) {
+                        chart = anychart.tagCloud();
+                        chart.container("wordcloud-container");
+                        chart.angles([0, -45, 90]);
+                        chart.colorScale(anychart.scales.ordinalColor().colors(['#2E86C1', '#5DADE2', '#1ABC9C', '#F1C40F', '#E67E22', '#8E44AD']));
+                        chart.fontFamily("Kanit");
+                        chart.tooltip().format("จำนวน: {%value}");
+
+                        chart.listen("pointClick", function(e) {
+                            const word = e.point.get("x");
+                            const count = e.point.get("value");
+                            const contexts = e.point.get("contexts");
+
+                            if (!contexts || contexts.length === 0) return;
+                            const studentIds = contexts.map(context => context.studentId).join(' / ');
+                            
+                            const htmlContent = `
+                                <div class="text-center">
+                                    <div class="p-3 bg-orange-300 rounded-lg mb-4"><h2 class="text-2xl font-bold text-black">ผลการสำรวจ คำว่า "${word}"</h2></div>
+                                    <div class="py-2"><p class="text-xl mb-1">จำนวนผู้ตอบ</p><p class="text-6xl font-bold text-red-600">${count}</p><p class="text-xl mt-1">คน</p></div>
+                                    <div class="w-full mt-4">
+                                        <table class="w-full border-collapse">
+                                            <thead><tr><th class="bg-black text-white p-3 text-lg">รายชื่อผู้ตอบ</th></tr></thead>
+                                            <tbody><tr><td class="p-3 border text-gray-700" style="word-break: break-word;">${studentIds}</td></tr></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            `;
+                            Swal.fire({ html: htmlContent, showConfirmButton: true, confirmButtonText: 'ปิด', width: '500px', showCloseButton: true });
+                        });
+                    }
+                    chart.data(jsonData);
+                    chart.draw();
+                    loadingOverlay.style.display = 'none';
+                })
+                .catch(error => {
+                    console.error("Error fetching Word Cloud data:", error);
+                    currentJsonData = [];
+                    loadingOverlay.innerHTML = "<p class='text-red-600'>ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง</p>";
+                });
+        }
+
+        function handleResetData() {
+            Swal.fire({
+                title: 'ยืนยันการรีเซตข้อมูล',
+                text: 'การกระทำนี้จะย้ายข้อมูลทั้งหมดไปที่ชีต backup และล้างข้อมูลปัจจุบัน ไม่สามารถย้อนกลับได้! กรุณาใส่รหัสเพื่อยืนยัน:',
+                input: 'password',
+                inputPlaceholder: 'กรอกรหัสยืนยัน',
+                inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยันการรีเซต',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#d33',
+                showLoaderOnConfirm: true,
+                preConfirm: (password) => {
+                    if (password !== '2568') {
+                        Swal.showValidationMessage('รหัสผ่านไม่ถูกต้อง');
+                        return false;
+                    }
+                    return password;
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ title: 'กำลังรีเซ็ตข้อมูล...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+                    
+                    const formData = new FormData();
+                    formData.append('action', 'reset');
+
+                    fetch(SCRIPT_URL, { method: 'POST', body: formData })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                Swal.fire('สำเร็จ!', 'ข้อมูลทั้งหมดถูกรีเซตเรียบร้อยแล้ว', 'success');
+                                updateWordCloud();
+                            } else {
+                                throw new Error(data.message || 'เกิดข้อผิดพลาดที่ไม่รู้จัก');
+                            }
+                        })
+                        .catch(error => {
+                            Swal.fire('เกิดข้อผิดพลาด!', `ไม่สามารถรีเซตข้อมูลได้: ${error.message}`, 'error');
+                        });
+                }
+            });
+        }
+
+        const showInputPopup = (title, typeValue) => {
+            Swal.fire({
+                title: title,
+                html: `<input id="student-id" class="swal2-input" placeholder="รหัสนักเรียน" inputmode="numeric" maxlength="5">` +
+                      `<textarea id="user-input" class="swal2-textarea" placeholder="พิมพ์คำตอบของคุณ..."></textarea>`,
+                confirmButtonText: 'บันทึก',
+                showCancelButton: true,
+                cancelButtonText: 'ยกเลิก',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const studentId = document.getElementById('student-id').value;
+                    const userInput = document.getElementById('user-input').value;
+                    if (!studentId || !userInput) { Swal.showValidationMessage(`กรุณากรอกข้อมูลให้ครบทั้ง 2 ช่อง`); return false; }
+                    if (!/^\d+$/.test(studentId)) { Swal.showValidationMessage(`รหัสนักเรียนต้องเป็นตัวเลขเท่านั้น`); return false; }
+                    return { studentId, userInput };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    const formData = new FormData();
+                    formData.append('type', typeValue);
+                    formData.append('studentId', result.value.studentId);
+                    formData.append('userInput', result.value.userInput);
+
+                    fetch(SCRIPT_URL, { method: 'POST', body: formData })
+                        .then(res => res.json())
+                        .then(data => {
+                            if(data.status === 'success') {
+                                Swal.fire('บันทึกแล้ว!', 'ข้อมูลจะอัปเดตใน Word Cloud เร็วๆ นี้', 'success');
+                                setTimeout(updateWordCloud, 2000);
+                            } else {
+                                Swal.fire('เกิดข้อผิดพลาด!', 'ไม่สามารถบันทึกข้อมูลได้: ' + data.message, 'error');
+                            }
+                        })
+                        .catch(error => Swal.fire('เกิดข้อผิดพลาดในการเชื่อมต่อ!', 'กรุณาตรวจสอบ URL หรือการเชื่อมต่ออินเทอร์เน็ต', 'error'));
+                }
+            });
+        };
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            updateWordCloud();
+            
+            document.getElementById('know-card').addEventListener('click', () => showInputPopup('K - สิ่งที่รู้อยู่แล้ว', 'สิ่งที่รู้อยู่แล้ว'));
+            document.getElementById('want-card').addEventListener('click', () => showInputPopup('W - สิ่งที่อยากรู้', 'สิ่งที่อยากรู้'));
+            document.getElementById('learned-card').addEventListener('click', () => showInputPopup('L - สิ่งที่ได้เรียนรู้', 'สิ่งที่ได้เรียนรู้'));
+            
+            document.getElementById('refresh-button').addEventListener('click', updateWordCloud);
+            document.getElementById('summary-button').addEventListener('click', showSummaryChart);
+            document.getElementById('reset-button').addEventListener('click', handleResetData);
+
+            document.querySelectorAll('input[name="filter"]').forEach(radio => {
+                radio.addEventListener('change', updateWordCloud);
+            });
+        });
+    </script>
+</body>
+</html>
